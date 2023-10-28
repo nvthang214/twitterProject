@@ -9,18 +9,21 @@ config()
 
 class UsersService {
   // Viết hàm nhận vào user_id để bỏ vào payload tạo access token
-  signAccessToken(user_id: string) {
+  private signAccessToken(user_id: string) {
     return signToken({
       payload: { user_id, token_type: TokenType.AccessToken },
       options: { expiresIn: process.env.ACCESS_TOKEN_EXPIRE_IN }
     })
   }
   // Viết hàm nhận vào user_id để bỏ vào payload tạo refresh token
-  signRefreshToken(user_id: string) {
+  private signRefreshToken(user_id: string) {
     return signToken({
       payload: { user_id, token_type: TokenType.RefreshToken },
       options: { expiresIn: process.env.REFRESH_TOKEN_EXPIRE_IN }
     })
+  }
+  private signAccessAndRefreshToken(user_id: string) {
+    return Promise.all([this.signAccessToken(user_id), this.signRefreshToken(user_id)])
   }
 
   async checkEmailExist(email: string) {
@@ -38,10 +41,11 @@ class UsersService {
     //lấy ra user_id của user vừa tạo
     const user_id = result.insertedId.toString()
     //tạo access token và refresh token
-    const [access_token, refresh_token] = await Promise.all([
-      this.signAccessToken(user_id),
-      this.signRefreshToken(user_id)
-    ])
+    const [access_token, refresh_token] = await this.signAccessAndRefreshToken(user_id)
+    return { access_token, refresh_token }
+  }
+  async login(user_id: string) {
+    const [access_token, refresh_token] = await this.signAccessAndRefreshToken(user_id)
     return { access_token, refresh_token }
   }
 }

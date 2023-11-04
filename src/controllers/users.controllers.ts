@@ -1,5 +1,13 @@
 import e, { NextFunction, Request, Response } from 'express'
-import { LoginReqBody, LogoutReqBody, ResgisterReqBody, TokenPayload } from '~/models/requests/User.request'
+import {
+  GetProfileReqParams,
+  LoginReqBody,
+  LogoutReqBody,
+  ResgisterReqBody,
+  TokenPayload,
+  UpdateMeReqBody,
+  resetPasswordReqBody
+} from '~/models/requests/User.request'
 import usersService from '~/services/users.services'
 import { ParamsDictionary } from 'express-serve-static-core'
 import User from '~/models/schemas/User.schema'
@@ -13,7 +21,10 @@ import HTTP_STATUS from '~/constants/httpStatus'
 export const loginController = async (req: Request<ParamsDictionary, any, LoginReqBody>, res: Response) => {
   const user = req.user as User
   const user_id = user._id as ObjectId // object id
-  const result = await usersService.login(user_id.toString())
+  const result = await usersService.login({
+    user_id: user_id.toString(),
+    verify: user.verify
+  })
   return res.json({
     message: USERS_MESSAGES.LOGIN_SUCCESS,
     result
@@ -86,14 +97,65 @@ export const resendEmailVerifyController = async (req: Request, res: Response) =
 
 export const forgotPassWordController = async (req: Request, res: Response) => {
   // lấy user_id từ req.user
-  const { _id } = req.user as User
+  const { _id, verify } = req.user as User
   // Tiến hành update lại forgot_password_token
-  const result = await usersService.forgotPassword((_id as ObjectId).toString())
+  const result = await usersService.forgotPassword({
+    user_id: (_id as ObjectId).toString(),
+    verify
+  })
   return res.json(result)
 }
 
 export const verifyForgotPasswordController = async (req: Request, res: Response) => {
   return res.json({
     message: USERS_MESSAGES.VERIFY_FORGOT_PASSWORD_TOKEN_SUCCESS
+  })
+}
+
+export const resetPasswordController = async (
+  req: Request<ParamsDictionary, any, resetPasswordReqBody>,
+  res: Response
+) => {
+  const { user_id } = req.decoded_forgot_password_token as TokenPayload
+  const { password } = req.body
+  // cập nhật password mới cho user có user_id
+  const result = await usersService.resetPassword({
+    user_id,
+    password
+  })
+  return res.json(result)
+}
+
+export const getMeController = async (req: Request<ParamsDictionary, any, UpdateMeReqBody>, res: Response) => {
+  // muốn lấy thông tin của user thì cần user_id
+  const { user_id } = req.decoded_authorization as TokenPayload
+  // lấy user từ db
+  const user = await usersService.getMe(user_id)
+  return res.json({
+    message: USERS_MESSAGES.GET_ME_SUCCESS,
+    result: user
+  })
+}
+
+export const updateMeController = async (req: Request, res: Response) => {
+  // muốn lấy thông tin của user thì cần user_id
+  const { user_id } = req.decoded_authorization as TokenPayload
+  const { body } = req
+  // lấy user từ db
+  const result = await usersService.updateMe(user_id, body)
+  return res.json({
+    message: USERS_MESSAGES.UPDATE_ME_SUCCESS,
+    result
+  })
+}
+
+export const getProfileController = async (req: Request<GetProfileReqParams>, res: Response) => {
+  // muốn lấy thông tin của user thì cần username
+  const { username } = req.params
+  // tiến hành lấy thông tin user từ db
+  const user = await usersService.getProfile(username)
+  return res.json({
+    message: USERS_MESSAGES.GET_PROFILE_SUCCESS,
+    result: user
   })
 }

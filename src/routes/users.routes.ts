@@ -1,12 +1,15 @@
 import { wrapAsync } from './../utils/handlers'
 import { Router } from 'express'
+import { rest } from 'lodash'
 import {
   emailVerifyController,
   forgotPassWordController,
+  getMeController,
   loginController,
   logoutController,
   registerController,
   resendEmailVerifyController,
+  resetPasswordController,
   verifyForgotPasswordController
 } from '~/controllers/users.controllers'
 
@@ -17,12 +20,13 @@ import {
   loginValidator,
   refreshTokenValidator,
   registerValidator,
+  resetPasswordValidator,
   verifyForgotPasswordTokenValidator
 } from '~/middlewares/users.middlewares'
 
 const usersRouter = Router()
 
-usersRouter.get('/login', loginValidator, wrapAsync(loginController))
+usersRouter.post('/login', loginValidator, wrapAsync(loginController))
 
 usersRouter.post('/register', registerValidator, wrapAsync(registerController))
 
@@ -39,5 +43,14 @@ usersRouter.post(
   verifyForgotPasswordTokenValidator,
   wrapAsync(verifyForgotPasswordController)
 )
+
+usersRouter.post(
+  '/reset-password',
+  resetPasswordValidator,
+  verifyForgotPasswordTokenValidator,
+  wrapAsync(resetPasswordController)
+)
+
+usersRouter.get('/me', accessTokenValidator, wrapAsync(getMeController))
 
 export default usersRouter

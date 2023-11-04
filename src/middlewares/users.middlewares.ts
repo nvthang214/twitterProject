@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express'
 import { check, checkSchema } from 'express-validator'
 import { JsonWebTokenError, verify } from 'jsonwebtoken'
 import { capitalize, has } from 'lodash'
+import { ObjectId } from 'mongodb'
+import { UserVerifyStatus } from '~/constants/enums'
 import HTTP_STATUS from '~/constants/httpStatus'
 import { USERS_MESSAGES } from '~/constants/messages'
 import { ErrorWithStatus } from '~/models/Errors'
@@ -182,9 +184,6 @@ export const accessTokenValidator = validate(
     {
       Authorization: {
         trim: true,
-        notEmpty: {
-          errorMessage: USERS_MESSAGES.ACCESS_TOKEN_IS_REQUIRED
-        },
         custom: {
           options: async (value, { req }) => {
             const access_token = value.split(' ')[1]
@@ -222,9 +221,6 @@ export const refreshTokenValidator = validate(
     {
       refresh_token: {
         trim: true,
-        notEmpty: {
-          errorMessage: USERS_MESSAGES.REFRESH_TOKEN_IS_REQUIRED
-        },
         custom: {
           options: async (value, { req }) => {
             try {
@@ -245,6 +241,162 @@ export const refreshTokenValidator = validate(
                 })
               }
               ;(req as Request).decoded_refresh_token = decoded_refresh_token
+            } catch (err) {
+              if (err instanceof JsonWebTokenError) {
+                throw new ErrorWithStatus({
+                  message: capitalize((err as JsonWebTokenError).message),
+                  status: HTTP_STATUS.UNAUTHORIZED
+                })
+              }
+              throw err
+            }
+            return true
+          }
+        }
+      }
+    },
+    ['body']
+  )
+)
+
+export const emailVerifyTokenValidator = validate(
+  checkSchema(
+    {
+      email_verify_token: {
+        trim: true,
+        custom: {
+          options: async (value, { req }) => {
+            if (!value) {
+              throw new ErrorWithStatus({
+                message: USERS_MESSAGES.EMAIL_VERIFY_TOKEN_IS_REQUIRED,
+                status: HTTP_STATUS.UNAUTHORIZED
+              })
+            }
+            try {
+              const decoded_email_verify_token = await verifyToken({
+                token: value,
+                secretOrPublicKey: process.env.JWT_SECRET_EMAIL_VERIFY_TOKEN as string
+              })
+              // lưu decoded_email_verify_token vào req
+              ;(req as Request).decoded_email_verify_token = decoded_email_verify_token
+              // lấy user_id từ decoded_email_verify_token
+              const user_id = decoded_email_verify_token.user_id
+              // tìm user trong database
+              const user = await databaseService.users.findOne({
+                _id: new ObjectId(user_id)
+              })
+              // nếu không tìm thấy user thì throw error
+              if (!user) {
+                throw new ErrorWithStatus({
+                  message: USERS_MESSAGES.USER_NOT_FOUND,
+                  status: HTTP_STATUS.UNAUTHORIZED
+                })
+              }
+              // nếu có user thì lưu user vào req
+              req.user = user
+              // nếu có user thì xem thử user này có bị banned hay không
+              if (user.verify === UserVerifyStatus.Banned) {
+                throw new ErrorWithStatus({
+                  message: USERS_MESSAGES.USER_BANNED,
+                  status: HTTP_STATUS.FORBIDDEN //403
+                })
+              }
+              if (user.verify != UserVerifyStatus.Verified && user.email_verify_token !== value) {
+                throw new ErrorWithStatus({
+                  message: USERS_MESSAGES.EMAIL_VERIFY_TOKEN_NOT_MATCH,
+                  status: HTTP_STATUS.UNAUTHORIZED
+                })
+              }
+            } catch (err) {
+              if (err instanceof JsonWebTokenError) {
+                throw new ErrorWithStatus({
+                  message: capitalize((err as JsonWebTokenError).message),
+                  status: HTTP_STATUS.UNAUTHORIZED
+                })
+              }
+              throw err
+            }
+            return true
+          }
+        }
+      }
+    },
+    ['body']
+  )
+)
+
+export const forgotPassWordValidator = validate(
+  checkSchema(
+    {
+      email: {
+        notEmpty: {
+          errorMessage: USERS_MESSAGES.EMAIL_IS_REQUIRED
+        },
+        trim: true,
+        isEmail: {
+          errorMessage: USERS_MESSAGES.EMAIL_IS_INVALID
+        },
+        custom: {
+          options: async (value, { req }) => {
+            const user = await databaseService.users.findOne({
+              email: value
+            })
+            if (!user) {
+              throw new ErrorWithStatus({
+                message: USERS_MESSAGES.USER_NOT_FOUND,
+                status: HTTP_STATUS.NOT_FOUND
+              })
+            }
+            req.user = user
+            return true
+          }
+        }
+      }
+    },
+    ['body']
+  )
+)
+
+export const verifyForgotPasswordTokenValidator = validate(
+  checkSchema(
+    {
+      forgot_password_token: {
+        trim: true,
+        custom: {
+          options: async (value, { req }) => {
+            if (!value) {
+              throw new ErrorWithStatus({
+                message: USERS_MESSAGES.FORGOT_PASSWORD_TOKEN_IS_REQUIRED,
+                status: HTTP_STATUS.UNAUTHORIZED
+              })
+            }
+            try {
+              const decoded_forgot_password_token = await verifyToken({
+                token: value,
+                secretOrPublicKey: process.env.JWT_SECRET_FORGOT_PASSWORD_TOKEN as string
+              })
+
+              ;(req as Request).decoded_forgot_password_token = decoded_forgot_password_token
+
+              const user_id = decoded_forgot_password_token.user_id
+
+              const user = await databaseService.users.findOne({
+                _id: new ObjectId(user_id)
+              })
+              if (!user) {
+                throw new ErrorWithStatus({
+                  message: USERS_MESSAGES.USER_NOT_FOUND,
+                  status: HTTP_STATUS.UNAUTHORIZED
+                })
+              }
+              req.user = user
+              // nếu không truyền đúng với db thì báo lỗi
+              if (user.forgot_password_token !== value) {
+                throw new ErrorWithStatus({
+                  message: USERS_MESSAGES.FORGOT_PASSWORD_TOKEN_NOT_MATCH,
+                  status: HTTP_STATUS.UNAUTHORIZED
+                })
+              }
             } catch (err) {
               if (err instanceof JsonWebTokenError) {
                 throw new ErrorWithStatus({

@@ -1,15 +1,19 @@
 import { wrapAsync } from './../utils/handlers'
 import { Router } from 'express'
 import {
+  changePasswordController,
   emailVerifyController,
+  followController,
   forgotPassWordController,
   getMeController,
   getProfileController,
   loginController,
   logoutController,
+  refreshTokenController,
   registerController,
   resendEmailVerifyController,
   resetPasswordController,
+  unfollowController,
   updateMeController,
   verifyForgotPasswordController
 } from '~/controllers/users.controllers'
@@ -17,12 +21,15 @@ import { filterMiddleware } from '~/middlewares/common.middlewares'
 
 import {
   accessTokenValidator,
+  changePasswordValidator,
   emailVerifyTokenValidator,
+  followValidator,
   forgotPassWordValidator,
   loginValidator,
   refreshTokenValidator,
   registerValidator,
   resetPasswordValidator,
+  unfollowValidator,
   updateMeValidator,
   verifiedUserValidator,
   verifyForgotPasswordTokenValidator
@@ -77,4 +84,24 @@ usersRouter.patch(
 )
 
 usersRouter.get('/:username', wrapAsync(getProfileController))
+
+usersRouter.post('/follow', accessTokenValidator, verifiedUserValidator, followValidator, wrapAsync(followController))
+
+usersRouter.delete(
+  '/unfollow/:user_id',
+  accessTokenValidator,
+  verifiedUserValidator,
+  unfollowValidator,
+  wrapAsync(unfollowController)
+)
+
+usersRouter.put(
+  '/change-password',
+  accessTokenValidator,
+  verifiedUserValidator,
+  changePasswordValidator,
+  wrapAsync(changePasswordController)
+)
+
+usersRouter.post('/refresh-token', refreshTokenValidator, wrapAsync(refreshTokenController))
 export default usersRouter
